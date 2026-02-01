@@ -47,4 +47,9 @@ public class InventoryController {
         inventoryService.deleteProduct(id);
         return "Đã xóa sản phẩm ID: " + id + " khỏi kho!";
     }
+    @GetMapping("/version")
+    @ResponseStatus(HttpStatus.OK)
+    public String getVersion() {
+        return "🚀 UPDATE MỚI NHẤT: Inventory Service V2 đã được deploy tự động qua CI/CD! Uy tín chưa bro?";
+    }
 }

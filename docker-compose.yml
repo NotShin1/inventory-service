@@ -15,13 +15,17 @@ services:
 
   app:
     container_name: inventory-app
-    build: .
+    # build: .
+    image: envyshin/inventory-service:latest
+
     ports:
       - "8080:8080"
     depends_on:
       - postgres
-    environment:
 
+    # 👇 ĐÂY LÀ CHỖ QUAN TRỌNG NHẤT
+    # Đây là lúc bro "tiêm" cấu hình vào cái Image
+    environment:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${DB_NAME}
       - SPRING_DATASOURCE_USERNAME=${DB_USER}
       - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}

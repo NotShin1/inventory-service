@@ -29,20 +29,19 @@ public class InventoryService {
 
     // 3. Update
     public Inventory updateProduct(Long id, Inventory inventoryRequest) {
-        // Tìm hàng, không thấy thì chửi (throw exception) :D
         Inventory existingProduct = inventoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Bro ơi, tìm không thấy sản phẩm ID: " + id));
 
-        // Update từng trường
+
         existingProduct.setSkuCode(inventoryRequest.getSkuCode());
         existingProduct.setProductName(inventoryRequest.getProductName());
         existingProduct.setPrice(inventoryRequest.getPrice());
 
-        // Lưu lại
+
         return inventoryRepository.save(existingProduct);
     }
 
-    // 4. Delete
+
     public void deleteProduct(Long id) {
         if (!inventoryRepository.existsById(id)) {
             throw new RuntimeException("Có hàng đâu mà xóa bro, check lại ID: " + id);
