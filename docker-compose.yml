@@ -1,4 +1,30 @@
 services:
+
+
+  app:
+    container_name: inventory-app
+    # build: .
+    image: envyshin/inventory-service:latest
+
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${DB_NAME}
+      - SPRING_DATASOURCE_USERNAME=${DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+    networks:
+      - inventory-network
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "-O", "-", "http://localhost:8080/actuator/health" ]
+      interval: 10s # 10 giây kiểm tra 1 lần
+      timeout: 5s # nếu quá 5s không có response -> fail
+      retries: 3  # Fail 3 lần liên tiếp -> Báo unhealthy
+      start_period: 30s # 30 mới khởi động
+
   postgres:
     image: postgres:15-alpine
     container_name: inventory-db
@@ -12,26 +38,13 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - inventory-network
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U postgres -d inventory-service"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  app:
-    container_name: inventory-app
-    # build: .
-    image: envyshin/inventory-service:latest
 
-    ports:
-      - "8080:8080"
-    depends_on:
-      - postgres
-
-    # 👇 ĐÂY LÀ CHỖ QUAN TRỌNG NHẤT
-    # Đây là lúc bro "tiêm" cấu hình vào cái Image
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${DB_NAME}
-      - SPRING_DATASOURCE_USERNAME=${DB_USER}
-      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
-      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
-    networks:
-      - inventory-network
 
 volumes:
   postgres_data:
