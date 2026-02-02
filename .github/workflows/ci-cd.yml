@@ -1,4 +1,4 @@
-name: Java CI/CD Pipeline
+name: DevSecOps Java CI/CD Pipeline
 
 on:
   push:
@@ -23,34 +23,57 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      # 3. Cấp quyền & Build ra file .jar (Bước CI cũ)
-      - name: Build with Maven
+      # 3. Chạy unit test ( bước bắt buộc)
+      # Nếu như fail -> dừng , không build nữa
+      - name: Run Unit Tests
         run: |
           chmod +x mvnw
-          ./mvnw clean package -DskipTests
+          ./mvnw test 
+      
+      # 4. Build file .jar
+      - name: Build application
+        run: ./mvnw clean package
 
-      # --- TỪ ĐÂY LÀ PHẦN CD MỚI THÊM VÀO ---
-
-      # 4. Đăng nhập vào Docker Hub (Dùng chìa khóa trong két sắt)
+      # 5. Đăng nhập vào Docker Hub
       - name: Login to Docker Hub
-        # Chỉ chạy bước này nếu là push vào main (Pull request thì không cần push image)
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # 5. Setup công cụ build Docker xịn (Buildx)
+      # 6. Setup Docker Buildx
       - name: Set up Docker Buildx
-        if: github.event_name != 'pull_request'
         uses: docker/setup-buildx-action@v3
 
-      # 6. Build ảnh và Đẩy lên Docker Hub
-      - name: Build and push Docker image
+      # 7. Build image để scan bằng Trivy
+      - name: Build Docker Image for Scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true # Load image vào local runner
+          tags: ${{ secrets.DOCKER_USERNAME }}/inventory-service:${{ github.sha }}
+
+      # 8. Scan lỗ hổng bằng Trivy
+      # Scan ở mức độ CRITICAL & HIGH. Nếu có lỗ hổng CRITICAL thì sẽ fail pipeline
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ secrets.DOCKER_USERNAME }}/inventory-service:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1' # Lỗi 1 nếu phát hiện có lỗi -> Dừng pipeline lại
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'HIGH,CRITICAL'
+
+      #9. Push Docker Image ( sau khi qua Test và Security )
+      # Push 2 tags: Mã commit (để truy vết) và Latest (để deploy)
+      - name: Push Docker Image
         if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          # Tự động gắn tag 'latest'
-          tags: ${{ secrets.DOCKER_USERNAME }}/inventory-service:latest
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/inventory-service:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/inventory-service:latest
