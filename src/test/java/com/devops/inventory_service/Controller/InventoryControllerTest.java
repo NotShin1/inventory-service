@@ -29,6 +29,6 @@ public class InventoryControllerTest {
                 .andExpect(MockMvcResultMatchers.status().isOk())
 
                 // 3. Mong đợi nội dung trả về có chứa chữ "V2"
-                .andExpect(MockMvcResultMatchers.content().string(Matchers.containsString("V2")));
+                .andExpect(MockMvcResultMatchers.content().string(Matchers.containsString("V3")));
     }
 }
