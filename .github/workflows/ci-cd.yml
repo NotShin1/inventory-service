@@ -23,13 +23,12 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      # 3. Chạy unit test ( bước bắt buộc)
-      # Nếu như fail -> dừng , không build nữa
+      # 3. Chạy unit test
       - name: Run Unit Tests
         run: |
           chmod +x mvnw
           ./mvnw test 
-      
+
       # 4. Build file .jar
       - name: Build application
         run: ./mvnw clean package
@@ -51,23 +50,21 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          load: true # Load image vào local runner
+          load: true
           tags: ${{ secrets.DOCKER_USERNAME }}/inventory-service:${{ github.sha }}
 
       # 8. Scan lỗ hổng bằng Trivy
-      # Scan ở mức độ CRITICAL & HIGH. Nếu có lỗ hổng CRITICAL thì sẽ fail pipeline
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: '${{ secrets.DOCKER_USERNAME }}/inventory-service:${{ github.sha }}'
           format: 'table'
-          exit-code: '1' # Lỗi 1 nếu phát hiện có lỗi -> Dừng pipeline lại
+          exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'HIGH,CRITICAL'
 
-      #9. Push Docker Image ( sau khi qua Test và Security )
-      # Push 2 tags: Mã commit (để truy vết) và Latest (để deploy)
+      # 9. Push Docker Image (Chỉ chạy khi push main, không chạy khi Pull Request)
       - name: Push Docker Image
         if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v5
@@ -77,3 +74,29 @@ jobs:
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/inventory-service:${{ github.sha }}
             ${{ secrets.DOCKER_USERNAME }}/inventory-service:latest
+
+      # 10. SSH vào VPS và Deploy
+      - name: Deploy to Production VPS
+        if: github.event_name != 'pull_request'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script: |
+            echo "🚀 Starting Deployment..."
+            
+            # 1. Vào thư mục chứa docker-compose
+            cd ~/inventory-deployment
+            
+            # 2. Kéo image mới nhất về (vừa push ở bước 9)
+            docker compose pull app
+            
+            # 3. Re-create container (Chỉ update thằng App, Database giữ nguyên)
+            docker compose up -d --no-deps --build app
+            
+            # 4. Dọn dẹp image rác (đỡ tốn dung lượng server)
+            docker image prune -f
+            
+            echo "✅ Deployment Successful!"

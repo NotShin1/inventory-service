@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.InetAddress;
 import java.util.List;
 
 
@@ -50,6 +51,21 @@ public class InventoryController {
     @GetMapping("/version")
     @ResponseStatus(HttpStatus.OK)
     public String getVersion() {
-        return "🚀 UPDATE MỚI NHẤT: Inventory Service V2 đã được deploy tự động qua CI/CD! Uy tín chưa bro?";
+        // Sửa lại message này để đánh dấu đây là bản V3
+        return "🔥 HELLO SHIN! Đây là bản build V3 - Đã tự động Deploy thành công!";
+    }
+
+    @GetMapping("/server-info")
+    @ResponseStatus(HttpStatus.OK)
+    public String getServerInfo() {
+        try {
+            // Lấy tên của Container ID (Hostname)
+            String containerId = InetAddress.getLocalHost().getHostName();
+            String osName = System.getProperty("os.name");
+
+            return String.format("✅ Server Check:\n- Container ID: %s\n- OS: %s\n- Status: Đang chạy ngon lành cành đào!", containerId, osName);
+        } catch (Exception e) {
+            return "Không lấy được thông tin server bro ơi!";
+        }
     }
 }
