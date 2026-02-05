@@ -14,6 +14,10 @@ RUN ./mvnw clean package
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
+# 👇 [QUAN TRỌNG] UPDATE HỆ ĐIỀU HÀNH ĐỂ VÁ LỖI BẢO MẬT (libexpat...) 👇
+## Phải chạy lúc đang là root, trước khi tạo user
+RUN apk update && apk upgrade --no-cache
+
 # Phân quyền User; Không chạy mặc định dưới quyền root nữa
 
 # Tạo user thường tên là 'appuser', add appser vào group appgroup
