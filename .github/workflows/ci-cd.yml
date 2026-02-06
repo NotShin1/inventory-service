@@ -100,3 +100,26 @@ jobs:
             docker image prune -f
             
             echo "✅ Deployment Successful!"
+
+      # ... (Các bước deploy cũ ở trên) ...
+
+      # --- 👇 THÊM ĐOẠN NÀY VÀO CUỐI CÙNG 👇 ---
+
+      - name : Discord Notification
+        uses: sarisia/actions-status-discord@v1
+        if: always()
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          title: "Devsecops Pipeline update"
+
+          description: |
+            **Repository:** [${{ github.repository }}](https://github.com/${{ github.repository }})
+            **Triggered by:** `${{ github.actor }}`
+            **Commit:** `${{ github.event.head_commit.message }}`
+            
+            --------------------------------------
+            **Status:** ${{ job.status }} 
+            (Click vào tiêu đề để xem chi tiết Log)
+
+          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+          username: "GitHub Actions Bot"
