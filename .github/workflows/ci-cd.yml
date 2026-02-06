@@ -103,23 +103,19 @@ jobs:
 
       # ... (Các bước deploy cũ ở trên) ...
 
-      # --- 👇 THÊM ĐOẠN NÀY VÀO CUỐI CÙNG 👇 ---
-
-      - name : Discord Notification
-        uses: sarisia/actions-status-discord@v1
-        if: always()
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          title: "Devsecops Pipeline update"
-
-          description: |
-            **Repository:** [${{ github.repository }}](https://github.com/${{ github.repository }})
-            **Triggered by:** `${{ github.actor }}`
-            **Commit:** `${{ github.event.head_commit.message }}`
-            
-            --------------------------------------
-            **Status:** ${{ job.status }} 
-            (Click vào tiêu đề để xem chi tiết Log)
-
-          avatar_url: "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
-          username: "GitHub Actions Bot"
+      - name: Notify Success
+        if: success()
+        run: |
+          curl -H "Content-Type: application/json" \
+          -X POST \
+          -d '{"content": "✅ **Ngon lành cành đào nha <@934324545500893234>!** \nCode mới (`${{ github.event.head_commit.message }}`) đã lên Server thành công! 🚀"}' \
+          ${{ secrets.DISCORD_WEBHOOK }}
+      
+      
+      - name: Nofity Failure
+        if: failure()
+        run: |
+          curl -H "Content-Type: application/json" \
+          -X POST \
+          -d '{"content": "🚨 **<@934324545500893234> DẬY FIX BUG GẤP!!!** \nBuild xịt rồi cha nội ơi! Server chưa update đâu! ☠️\nLog nè: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' \
+          ${{ secrets.DISCORD_WEBHOOK }}
