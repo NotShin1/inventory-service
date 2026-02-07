@@ -28,6 +28,8 @@ public class SecurityConfig {
         http.csrf(csrf -> csrf.disable())
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+
+                        .requestMatchers("/actuator/**", "/actuator/health/**").permitAll()
                         // Cho phép Login, Register, Version Check không cần token
                         .requestMatchers("/api/auth/**", "/api/inventory/version", "/api/inventory/server-info").permitAll()
                         // Còn lại bắt buộc phải có Token
