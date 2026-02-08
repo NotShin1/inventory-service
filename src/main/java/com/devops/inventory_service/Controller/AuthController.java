@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -36,29 +37,30 @@ public class AuthController {
         return ResponseEntity.ok(authService.register(request));
     }
 
-    // --- LOGIN: Fix lỗi Duplicate Key ---
+    // --- LOGIN ---
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
         // 1. Check Pass
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
         SecurityContextHolder.getContext().setAuthentication(authentication);
+
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
 
-        // 2. Tạo JWT Access Token
-        String jwt = jwtUtils.generateToken(userDetails.getUsername());
+        // 2. Lấy Roles ra để nhét vào Token
+        List<String> roles = userDetails.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.toList());
 
-        // 3. Lấy User ID từ DB (Để tạo Refresh Token)
+        // 3. Tạo JWT Access Token (Có chứa Roles)
+        String jwt = jwtUtils.generateToken(userDetails.getUsername(), roles);
+
+        // 4. Lấy User ID từ DB (Để tạo Refresh Token)
         User user = userRepository.findByUsername(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // 4. Tạo Refresh Token (Hàm này tự xóa cũ -> tạo mới)
+        // 5. Tạo Refresh Token
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(user.getId());
-
-        // 5. Lấy Roles
-        List<String> roles = userDetails.getAuthorities().stream()
-                .map(item -> item.getAuthority())
-                .collect(Collectors.toList());
 
         return ResponseEntity.ok(new JwtResponse(
                 jwt,
@@ -69,6 +71,7 @@ public class AuthController {
         ));
     }
 
+    // --- REFRESH TOKEN ---
     @PostMapping("/refreshtoken")
     public ResponseEntity<?> refreshtoken(@RequestBody TokenRefreshRequest request) {
         String requestRefreshToken = request.getRefreshToken();
@@ -78,12 +81,18 @@ public class AuthController {
                 .map(token -> {
                     User user = token.getUser();
 
-                    // Logic cũ: Xóa cũ -> Tạo mới (Dễ gây lỗi Duplicate Key như bro vừa bị)
-                    // Logic mới: Gọi createRefreshToken luôn.
-                    // Hàm createRefreshToken tui vừa viết ở trên nó sẽ tự tìm token của user đó và UPDATE lại token mới.
-
+                    // Logic: Tạo Refresh Token mới
                     RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user.getId());
-                    String newAccessToken = jwtUtils.generateToken(user.getUsername());
+
+                    // Logic MỚI: Lấy roles từ User Entity để tạo Access Token mới
+                    // Lưu ý: User Entity phải map với bảng Role (tên hàm getRoles() tùy vào bro đặt trong Model)
+                    List<String> roles = user.getRoles().stream()
+                            .map(role -> "ROLE_" + role.getName()) // Đảm bảo có prefix ROLE_ nếu trong DB chưa có
+                            // Nếu DB đã có chữ ROLE_ rồi thì chỉ cần .map(Role::getName)
+                            .collect(Collectors.toList());
+
+                    // Tạo Access Token mới chứa Roles
+                    String newAccessToken = jwtUtils.generateToken(user.getUsername(), roles);
 
                     return ResponseEntity.ok(new TokenRefreshResponse(newAccessToken, newRefreshToken.getToken()));
                 })

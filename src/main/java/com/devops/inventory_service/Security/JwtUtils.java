@@ -10,61 +10,72 @@ import org.slf4j.LoggerFactory;
 
 import java.security.Key;
 import java.util.Date;
+import java.util.List;
+import java.util.function.Function;
 
 @Component
 public class JwtUtils {
 
-    // Logger để ghi log lỗi (thay vì System.err) - Chuẩn DevOps hơn
     private static final Logger logger = LoggerFactory.getLogger(JwtUtils.class);
 
-    // Inject giá trị từ application.properties
-    // Spring sẽ tự tìm key 'app.jwtSecret' đã map với biến môi trường JWT_SECRET
     @Value("${app.jwtSecret}")
     private String jwtSecret;
 
-    // Inject thời gian hết hạn (tính bằng ms)
     @Value("${app.jwtExpirationMs}")
     private int jwtExpirationMs;
 
-    /**
-     * Chuyển chuỗi Secret (String) thành Key Object chuẩn HMAC-SHA.
-     * Lưu ý: Chuỗi trong .env phải đủ dài (ít nhất 32 ký tự / 256 bit).
-     */
     private Key getSigningKey() {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes());
     }
 
     /**
-     * TẠO TOKEN (Generate JWT)
-     * @param username Tên đăng nhập của user
-     * @return Chuỗi JWT Token
+     * TẠO TOKEN (Generate JWT) - UPDATE: Thêm Roles vào Payload
+     * @param username Tên đăng nhập
+     * @param roles Danh sách quyền (VD: ["ROLE_ADMIN", "ROLE_USER"])
      */
-    public String generateToken(String username) {
+    public String generateToken(String username, List<String> roles) {
         return Jwts.builder()
-                .setSubject(username) // Payload: Chứa username
-                .setIssuedAt(new Date()) // Payload: Thời gian tạo
-                .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs)) // Payload: Thời gian hết hạn
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256) // Header + Signature: Ký bằng thuật toán HS256
+                .setSubject(username)
+                .claim("roles", roles) // <--- QUAN TRỌNG: Nhét Role vào đây
+                .setIssuedAt(new Date())
+                .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs))
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
 
     /**
      * GIẢI MÃ TOKEN (Get Username)
-     * @param token Chuỗi JWT cần giải mã
-     * @return Username nằm trong token
      */
     public String getUsernameFromJwtToken(String token) {
+        return extractClaim(token, Claims::getSubject);
+    }
+
+    /**
+     * LẤY ROLES TỪ TOKEN (MỚI)
+     * Để Filter dùng cái này map sang Authorities mà không cần query DB
+     */
+    public List<String> getRolesFromJwtToken(String token) {
+        Claims claims = extractAllClaims(token);
+        return claims.get("roles", List.class);
+    }
+
+    // Helper function để lấy Claims cho gọn code
+    private <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
+        final Claims claims = extractAllClaims(token);
+        return claimsResolver.apply(claims);
+    }
+
+    private Claims extractAllClaims(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(getSigningKey())
                 .build()
                 .parseClaimsJws(token)
-                .getBody()
-                .getSubject();
+                .getBody();
     }
 
     /**
      * KIỂM TRA TÍNH HỢP LỆ (Validate Token)
-     * Check xem token có bị sửa đổi, hết hạn, hoặc sai chữ ký không.
+     * Giữ nguyên logic bắt lỗi bảo mật
      */
     public boolean validateJwtToken(String authToken) {
         try {
