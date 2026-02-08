@@ -69,7 +69,6 @@ public class AuthController {
         ));
     }
 
-    // --- REFRESH TOKEN: Rotation (Đổi cũ lấy mới) ---
     @PostMapping("/refreshtoken")
     public ResponseEntity<?> refreshtoken(@RequestBody TokenRefreshRequest request) {
         String requestRefreshToken = request.getRefreshToken();
@@ -77,17 +76,17 @@ public class AuthController {
         return refreshTokenService.findByToken(requestRefreshToken)
                 .map(refreshTokenService::verifyExpiration)
                 .map(token -> {
-                    // Lấy User từ token cũ
                     User user = token.getUser();
 
-                    // Gọi hàm này: Nó sẽ TỰ ĐỘNG XÓA TOKEN CŨ (của User này) và TẠO MỚI
-                    // Không cần gọi deleteByToken thủ công nữa vì createRefreshToken đã có deleteByUser rồi
-                    RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user.getId());
+                    // Logic cũ: Xóa cũ -> Tạo mới (Dễ gây lỗi Duplicate Key như bro vừa bị)
+                    // Logic mới: Gọi createRefreshToken luôn.
+                    // Hàm createRefreshToken tui vừa viết ở trên nó sẽ tự tìm token của user đó và UPDATE lại token mới.
 
+                    RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user.getId());
                     String newAccessToken = jwtUtils.generateToken(user.getUsername());
 
                     return ResponseEntity.ok(new TokenRefreshResponse(newAccessToken, newRefreshToken.getToken()));
                 })
-                .orElseThrow(() -> new RuntimeException("Refresh token không tồn tại hoặc đã bị thu hồi!"));
+                .orElseThrow(() -> new RuntimeException("Refresh token không tồn tại!"));
     }
 }
