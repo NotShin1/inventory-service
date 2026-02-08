@@ -1,6 +1,6 @@
 package com.devops.inventory_service.Controller;
 
-import com.devops.inventory_service.DTO.*; // Import đống DTO bro vừa tạo
+import com.devops.inventory_service.DTO.*;
 import com.devops.inventory_service.Model.RefreshToken;
 import com.devops.inventory_service.Model.User;
 import com.devops.inventory_service.Repository.UserRepository;
@@ -31,63 +31,63 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
     private final UserRepository userRepository;
 
-    // --- ĐĂNG KÝ ---
     @PostMapping("/register")
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
-        // Dùng DTO RegisterRequest
         return ResponseEntity.ok(authService.register(request));
     }
 
-    // --- ĐĂNG NHẬP (TRẢ VỀ JWT + REFRESH TOKEN) ---
+    // --- LOGIN: Fix lỗi Duplicate Key ---
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
-
-        // 1. Xác thực qua Spring Security (User/Pass)
+        // 1. Check Pass
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
-
-        // 2. Set context (để Spring biết thằng này đã login)
         SecurityContextHolder.getContext().setAuthentication(authentication);
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
 
-        // 3. Tạo Access Token (Ngắn hạn - 15p)
+        // 2. Tạo JWT Access Token
         String jwt = jwtUtils.generateToken(userDetails.getUsername());
 
-        // 4. Tìm User ID để tạo Refresh Token
-        User user = userRepository.findByUsername(userDetails.getUsername()).get();
+        // 3. Lấy User ID từ DB (Để tạo Refresh Token)
+        User user = userRepository.findByUsername(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // 5. Tạo Refresh Token (Dài hạn - 7 ngày) lưu xuống DB
+        // 4. Tạo Refresh Token (Hàm này tự xóa cũ -> tạo mới)
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(user.getId());
 
-        // 6. Lấy Role (để FE biết là Admin hay User)
+        // 5. Lấy Roles
         List<String> roles = userDetails.getAuthorities().stream()
                 .map(item -> item.getAuthority())
                 .collect(Collectors.toList());
 
-        // 7. Trả về DTO JwtResponse chuẩn chỉnh
         return ResponseEntity.ok(new JwtResponse(
                 jwt,
-                refreshToken.getToken(), // Token dài hạn
+                refreshToken.getToken(),
                 user.getId(),
                 user.getUsername(),
                 roles
         ));
     }
 
-    // --- CẤP LẠI TOKEN MỚI (DÙNG REFRESH TOKEN) ---
+    // --- REFRESH TOKEN: Rotation (Đổi cũ lấy mới) ---
     @PostMapping("/refreshtoken")
     public ResponseEntity<?> refreshtoken(@RequestBody TokenRefreshRequest request) {
         String requestRefreshToken = request.getRefreshToken();
 
         return refreshTokenService.findByToken(requestRefreshToken)
-                .map(refreshTokenService::verifyExpiration) // Kiểm tra xem còn hạn không
-                .map(RefreshToken::getUser) // Lấy user ra
-                .map(user -> {
-                    // Cấp Access Token mới (15 phút nữa)
-                    String token = jwtUtils.generateToken(user.getUsername());
-                    // Trả về DTO TokenRefreshResponse
-                    return ResponseEntity.ok(new TokenRefreshResponse(token, requestRefreshToken));
+                .map(refreshTokenService::verifyExpiration)
+                .map(token -> {
+                    // Lấy User từ token cũ
+                    User user = token.getUser();
+
+                    // Gọi hàm này: Nó sẽ TỰ ĐỘNG XÓA TOKEN CŨ (của User này) và TẠO MỚI
+                    // Không cần gọi deleteByToken thủ công nữa vì createRefreshToken đã có deleteByUser rồi
+                    RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user.getId());
+
+                    String newAccessToken = jwtUtils.generateToken(user.getUsername());
+
+                    return ResponseEntity.ok(new TokenRefreshResponse(newAccessToken, newRefreshToken.getToken()));
                 })
-                .orElseThrow(() -> new RuntimeException("Refresh token không tồn tại trong DB hoặc đã hết hạn!"));
+                .orElseThrow(() -> new RuntimeException("Refresh token không tồn tại hoặc đã bị thu hồi!"));
     }
 }

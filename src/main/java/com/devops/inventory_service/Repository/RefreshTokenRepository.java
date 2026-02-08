@@ -12,6 +12,7 @@ import java.util.Optional;
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
     Optional<RefreshToken> findByToken(String token);
 
+    // QUAN TRỌNG: Hàm này dùng để xóa token cũ
     @Modifying
     int deleteByUser(User user);
 }

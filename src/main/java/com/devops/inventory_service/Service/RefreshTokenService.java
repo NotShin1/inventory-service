@@ -1,6 +1,7 @@
 package com.devops.inventory_service.Service;
 
 import com.devops.inventory_service.Model.RefreshToken;
+import com.devops.inventory_service.Model.User;
 import com.devops.inventory_service.Repository.RefreshTokenRepository;
 import com.devops.inventory_service.Repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,7 +16,6 @@ import java.util.UUID;
 @Service
 public class RefreshTokenService {
 
-    // Lấy thời gian sống của Refresh Token từ config (7 ngày)
     @Value("${app.jwtRefreshExpirationMs}")
     private Long refreshTokenDurationMs;
 
@@ -29,29 +29,36 @@ public class RefreshTokenService {
         return refreshTokenRepository.findByToken(token);
     }
 
-    // Tạo token mới
+    // --- HÀM TẠO TOKEN (Dùng cho cả Login và Refresh) ---
+    @Transactional
     public RefreshToken createRefreshToken(Long userId) {
-        RefreshToken refreshToken = new RefreshToken();
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User Not Found"));
 
-        refreshToken.setUser(userRepository.findById(userId).get());
+        // 1. DỌN DẸP: Xóa token cũ của user này (Fix lỗi Duplicate Key)
+        refreshTokenRepository.deleteByUser(user);
+
+        // 2. TẠO MỚI
+        RefreshToken refreshToken = new RefreshToken();
+        refreshToken.setUser(user);
         refreshToken.setExpiryDate(Instant.now().plusMillis(refreshTokenDurationMs));
         refreshToken.setToken(UUID.randomUUID().toString());
 
         return refreshTokenRepository.save(refreshToken);
     }
 
-    // Kiểm tra hết hạn
+    // Check hạn sử dụng
     public RefreshToken verifyExpiration(RefreshToken token) {
         if (token.getExpiryDate().compareTo(Instant.now()) < 0) {
             refreshTokenRepository.delete(token);
-            throw new RuntimeException("Refresh token đã hết hạn. Vui lòng đăng nhập lại!");
+            throw new RuntimeException("Refresh token hết hạn. Login lại đi bro!");
         }
         return token;
     }
 
-    // Xóa token khi user logout (nếu cần)
+    // Xóa token theo chuỗi (Dùng khi logout hoặc rotation)
     @Transactional
-    public int deleteByUserId(Long userId) {
-        return refreshTokenRepository.deleteByUser(userRepository.findById(userId).get());
+    public void deleteByToken(String token) {
+        refreshTokenRepository.findByToken(token).ifPresent(refreshTokenRepository::delete);
     }
 }
