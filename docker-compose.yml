@@ -1,13 +1,9 @@
 services:
-
-
   app:
     container_name: inventory-app
-    # build: .
     image: envyshin/inventory-service:latest
-
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -18,33 +14,36 @@ services:
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
     networks:
       - inventory-network
+    env_file:
+      - .env
     healthcheck:
+      # Check xem app đã lên chưa qua cổng actuator/health
       test: [ "CMD", "wget", "-q", "-O", "-", "http://localhost:8080/actuator/health" ]
-      interval: 10s # 10 giây kiểm tra 1 lần
-      timeout: 5s # nếu quá 5s không có response -> fail
-      retries: 3  # Fail 3 lần liên tiếp -> Báo unhealthy
-      start_period: 30s # 30 mới khởi động
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   postgres:
     image: postgres:15-alpine
     container_name: inventory-db
     environment:
+
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${DB_NAME}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - inventory-network
     healthcheck:
-      test: ["CMD-SHELL","pg_isready -U postgres -d inventory-service"]
+
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-
 
 volumes:
   postgres_data:
