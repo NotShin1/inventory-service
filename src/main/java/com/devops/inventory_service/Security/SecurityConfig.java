@@ -1,12 +1,13 @@
-package com.devops.inventory_service.Security; // Check lại package của bro nhé
+package com.devops.inventory_service.Security;
 
-import com.devops.inventory_service.Security.JwtAuthFilter; // Check import filter
-import com.devops.inventory_service.Security.UserDetailsServiceImpl; // Check import service
+import com.devops.inventory_service.Security.JwtAuthFilter;
+import com.devops.inventory_service.Security.UserDetailsServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -17,10 +18,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+import org.springframework.security.web.header.writers.XXssProtectionHeaderWriter;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity(prePostEnabled = true) // Để xài được @PreAuthorize
+@EnableMethodSecurity(prePostEnabled = true)
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -30,42 +32,54 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // 1. Tắt CSRF (API stateless không cần)
+                // 1. Tắt CSRF
                 .csrf(csrf -> csrf.disable())
 
-                // 2. Chế độ Stateless (Không lưu session)
+                // 2. Chế độ Stateless
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                // 3. 🛡️ ÉP BUỘC HTTPS (Cho Domain thật của bro)
-                .requiresChannel(channel -> channel.anyRequest().requiresSecure())
+                // 3. 🛡️ QUẢN LÝ HTTPS (FIXED)
+                // Sửa lỗi 'permitAll': Dùng requiresInsecure() cho HTTP, requiresSecure() cho HTTPS
+                .requiresChannel(channel -> channel
+                        .requestMatchers("/actuator/**", "/health/**").requiresInsecure() // Cho phép HTTP (để Health Check không chết)
+                        .anyRequest().requiresSecure() // Các API khác bắt buộc HTTPS
+                )
 
-                // 4. 🛡️ SECURITY HEADERS (Cấu hình "Hardened" chống tấn công)
+                // 4. 🛡️ SECURITY HEADERS (FIXED)
                 .headers(headers -> headers
-                        // HSTS: Ép trình duyệt dùng HTTPS trong 1 năm
+                        // HSTS
                         .httpStrictTransportSecurity(hsts -> hsts
                                 .includeSubDomains(true)
                                 .maxAgeInSeconds(31536000)
+                                .preload(true)
                         )
                         // Chống Clickjacking
                         .frameOptions(frame -> frame.deny())
-                        // Chống XSS (Browser block)
-                        .xssProtection(xss -> xss.headerValue(org.springframework.security.web.header.writers.XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK))
-                        // Content Security Policy (CSP): Chỉ cho phép script từ chính domain mình
+
+                        // Chống XSS
+                        .xssProtection(xss -> xss.headerValue(XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK))
+
+                        // CSP
                         .contentSecurityPolicy(csp -> csp
-                                .policyDirectives("default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self';")
+                                .policyDirectives("default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';")
                         )
+
                         // Referrer Policy
                         .referrerPolicy(referrer -> referrer.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+
+                        // Sửa lỗi 'Operator ==': Chỉ cần gọi hàm là bật mặc định (nosniff)
+                        .contentTypeOptions(Customizer.withDefaults())
                 )
 
-                // 5. Phân quyền (Giữ nguyên logic cũ của bro)
+                // 5. Phân quyền truy cập
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/**", "/health/**").permitAll() // Cho Monitoring
-                        .requestMatchers("/api/auth/**", "/api/inventory/version").permitAll() // Public API
-                        .anyRequest().authenticated() // Còn lại phải có Token
+                        .requestMatchers("/actuator/**", "/health/**").permitAll()
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/inventory/version").permitAll()
+                        .anyRequest().authenticated()
                 );
 
-        // 6. Config Authentication Provider & Filter cũ của bro
+        // 6. Config Authentication Provider & Filter
         http.authenticationProvider(authenticationProvider());
         http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
