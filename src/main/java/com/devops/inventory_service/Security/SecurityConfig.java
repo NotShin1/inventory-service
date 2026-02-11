@@ -33,26 +33,28 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // 1. Tắt CSRF
+                // 1. Tắt CSRF (Do dùng JWT/Stateless API)
                 .csrf(csrf -> csrf.disable())
 
-                // 2. Chế độ Stateless
+                // 2. Chế độ Stateless (Không lưu session server-side)
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                // 3. 🛡️ QUẢN LÝ HTTPS
+                // 3. 🛡️ QUẢN LÝ HTTPS & KÊNH TRUYỀN
                 .requiresChannel(channel -> channel
+                        // Cho phép HTTP đối với Actuator/Health (để Docker check nội bộ)
                         .requestMatchers("/actuator/**", "/health/**").requiresInsecure()
+                        // Các API nghiệp vụ bắt buộc HTTPS
                         .anyRequest().requiresSecure()
                 )
 
-                // 4. 🛡️ SECURITY HEADERS
+                // 4. 🛡️ SECURITY HEADERS (Cấu hình chuẩn Hardening)
                 .headers(headers -> headers
                         .httpStrictTransportSecurity(hsts -> hsts
                                 .includeSubDomains(true)
                                 .maxAgeInSeconds(31536000)
                                 .preload(true)
                         )
-                        .frameOptions(frame -> frame.deny())
+                        .frameOptions(frame -> frame.deny()) // Chống Clickjacking
                         .xssProtection(xss -> xss.headerValue(XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK))
                         .contentSecurityPolicy(csp -> csp
                                 .policyDirectives("default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';")
@@ -61,32 +63,44 @@ public class SecurityConfig {
                         .contentTypeOptions(Customizer.withDefaults())
                 )
 
-                // 5. Phân quyền truy cập (AUTHORIZATION)
+                // 5. 🚦 PHÂN QUYỀN TRUY CẬP (AUTHORIZATION)
                 .authorizeHttpRequests(auth -> auth
-                        // Public Endpoints
-                        .requestMatchers("/actuator/**", "/health/**").permitAll()
+                        // --- KHU VỰC PUBLIC (Ai cũng vào được) ---
+                        // 🔥 QUAN TRỌNG: Mở cửa cho Docker Healthcheck chọc vào
+                        .requestMatchers("/actuator/health/**").permitAll()
+
+                        // Login/Register
                         .requestMatchers("/api/auth/**").permitAll()
+                        // API check version
                         .requestMatchers("/api/inventory/version").permitAll()
 
-                        // === [START] ADDED NEW RULES FOR HARDENING ===
+                        // --- KHU VỰC ADMIN / MONITORING (Cần bảo mật cao) ---
 
-                        // Feature 8: Export Báo Cáo -> Chỉ ADMIN (Resource Killer Prevention)
+                        // 🔐 Prometheus Metrics & Actuator khác -> Cần Role ADMIN
+                        .requestMatchers("/actuator/**").hasRole("ADMIN")
+
+                        // Feature 8: Export Báo Cáo -> Chỉ ADMIN (Chống Resource Exhaustion)
                         .requestMatchers("/api/inventory/export").hasRole("ADMIN")
 
-                        // Feature 7: Upload Ảnh -> Chỉ ADMIN (Malware Prevention)
-                        // Chỉ chặn method POST, còn GET ảnh (nếu có) thì có thể cho User xem
+                        // Feature 7: Upload Ảnh -> Chỉ ADMIN (Chống Malware Upload)
                         .requestMatchers(HttpMethod.POST, "/api/inventory/{id}/image").hasRole("ADMIN")
 
-                        // Feature 6: Orders -> Phải Login (IDOR Prevention logic sẽ nằm ở Service layer)
-                        .requestMatchers("/api/orders/**").authenticated()
+                        // --- KHU VỰC USER / AUTHENTICATED ---
 
-                        // === [END] ADDED NEW RULES ===
+                        // Feature 6: Xem đơn hàng (IDOR logic nằm ở Service) -> Phải Login
+                        .requestMatchers("/api/orders/**").authenticated()
 
                         // Default: Các API còn lại bắt buộc phải Login
                         .anyRequest().authenticated()
-                );
+                )
 
-        // 6. Config Authentication Provider & Filter
+                // 6. 🛡️ CẤU HÌNH AUTHENTICATION
+
+                // 🔥 BẬT BASIC AUTH: Để Prometheus Server có thể login (bằng user/pass) để lấy metrics
+                // Nếu không có dòng này, Prometheus sẽ bị chặn (401) vì nó không biết dùng JWT
+                .httpBasic(Customizer.withDefaults());
+
+        // 7. Thêm JWT Filter cho User người dùng thật
         http.authenticationProvider(authenticationProvider());
         http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
