@@ -1,4 +1,7 @@
 services:
+  # ==========================================
+  # 1. APP SERVICE
+  # ==========================================
   app:
     container_name: inventory-app
     image: envyshin/inventory-service:latest
@@ -17,18 +20,19 @@ services:
     env_file:
       - .env
     healthcheck:
-      # Check xem app đã lên chưa qua cổng actuator/health
       test: [ "CMD", "wget", "-q", "-O", "-", "http://localhost:8080/actuator/health" ]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 30s
 
+  # ==========================================
+  # 2. DATABASE SERVICE
+  # ==========================================
   postgres:
     image: postgres:15-alpine
     container_name: inventory-db
     environment:
-
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${DB_NAME}
@@ -39,14 +43,63 @@ services:
     networks:
       - inventory-network
     healthcheck:
-
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  # ==========================================
+  # 3. PROMETHEUS (SECURE MODE)
+  # ==========================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: inventory-prometheus
+    user: root # Tạm thời cần root để copy/sửa file config (Prometheus mặc định là user 'nobody')
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro # Mount Read-Only cho an toàn
+      - prometheus_data:/prometheus # Volume lưu dữ liệu
+    environment:
+      # Nạp biến môi trường từ .env vào container này
+      - APP_ADMIN_USERNAME=${APP_ADMIN_USERNAME}
+      - APP_ADMIN_PASSWORD=${APP_ADMIN_PASSWORD}
+    # 🔥 MAGIC COMMAND: Thay thế user/pass rồi mới chạy
+    command:
+      - /bin/sh
+      - -c
+      - |
+        # 1. Copy file config mẫu ra chỗ có quyền ghi (Data dir)
+        cp /etc/prometheus/prometheus.yml /prometheus/prometheus.yml && \
+        
+        # 2. Thay thế PLACEHOLDER bằng biến môi trường thật (dùng dấu | làm delimiter để tránh lỗi ký tự lạ)
+        sed -i "s|PLACEHOLDER_USERNAME|$APP_ADMIN_USERNAME|g" /prometheus/prometheus.yml && \
+        sed -i "s|PLACEHOLDER_PASSWORD|$APP_ADMIN_PASSWORD|g" /prometheus/prometheus.yml && \
+        
+        # 3. Chạy Prometheus với file config đã "tiêm" mật khẩu
+        /bin/prometheus --config.file=/prometheus/prometheus.yml --storage.tsdb.path=/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - inventory-network
+
+  # ==========================================
+  # 4. GRAFANA
+  # ==========================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: inventory-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${APP_ADMIN_PASSWORD} # Dùng chung pass admin cho tiện (hoặc tạo biến khác tùy bro)
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - inventory-network
+
 volumes:
   postgres_data:
+  grafana_data:
+  prometheus_data: # Volume mới cho Prometheus
 
 networks:
   inventory-network:

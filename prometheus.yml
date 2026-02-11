@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 5s      # 1. Chu kỳ quét: Cứ 5 giây Prometheus sẽ đi gom số liệu 1 lần.
+
+scrape_configs:
+  - job_name: 'inventory_service'    # 2. Tên công việc (đặt gì cũng được, để phân biệt các app)
+    metrics_path: '/actuator/prometheus' # 3. Đường dẫn lấy metrics (Cửa sau mà app Spring Boot mở ra)
+    static_configs:
+      - targets: ['app:8080']        # 4. Mục tiêu: 'app' là tên service trong docker-compose.
+        # Vì cùng mạng Docker nên gọi tên service là nó hiểu IP.
+    basic_auth:
+      username: 'PLACEHOLDER_USERNAME'
+      password: 'PLACEHOLDER_PASSWORD'
