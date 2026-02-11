@@ -1,6 +1,7 @@
 package com.devops.inventory_service.Controller;
 
 import com.devops.inventory_service.Security.JwtUtils;
+import com.devops.inventory_service.Service.ImageService;
 import com.devops.inventory_service.Service.InventoryService;
 import com.devops.inventory_service.Security.UserDetailsServiceImpl; // Import class thật, không phải Interface
 import com.devops.inventory_service.Repository.RoleRepository;
@@ -38,6 +39,9 @@ public class InventoryControllerTest {
     // Để SecurityConfig không phải đi tìm class thật rồi đụng vào DB
     @MockitoBean
     private UserDetailsServiceImpl userDetailsService;
+
+    @MockitoBean
+    private ImageService imageService;
 
     // --- 3. MOCK REPOSITORY (BỊT MIỆNG DATALOADER) ---
     // Vì DataLoader chạy lúc khởi động, nó sẽ đòi mấy cái này.
