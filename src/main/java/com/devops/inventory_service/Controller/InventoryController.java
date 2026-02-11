@@ -1,14 +1,22 @@
 package com.devops.inventory_service.Controller;
 
 import com.devops.inventory_service.Model.Inventory;
+import com.devops.inventory_service.Service.ImageService; // Service mới xử lý ảnh
 import com.devops.inventory_service.Service.InventoryService;
+import io.github.bucket4j.Bandwidth;
+import io.github.bucket4j.Bucket;
+import io.github.bucket4j.Refill;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.net.InetAddress;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -18,8 +26,15 @@ import java.util.Map;
 public class InventoryController {
 
     private final InventoryService inventoryService;
+    private final ImageService imageService; // Inject thêm service xử lý ảnh
 
-    // --- KHU VỰC PUBLIC / USER (READ-ONLY) ---
+    private final Bucket bucket = Bucket.builder()
+            .addLimit(Bandwidth.classic(2, Refill.intervally(2, Duration.ofMinutes(1))))
+            .build();
+
+    // =========================================================
+    // 🟢 KHU VỰC PUBLIC / USER (READ-ONLY)
+    // =========================================================
 
     // GET: Lấy danh sách
     @GetMapping
@@ -41,9 +56,6 @@ public class InventoryController {
                     .body(Map.of("error", "Input Error", "message", e.getMessage()));
         }
     }
-
-    // --- KHU VỰC ADMIN (WRITE) ---
-
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> createProduct(@RequestBody Inventory inventory) {
@@ -66,16 +78,65 @@ public class InventoryController {
         return ResponseEntity.ok(Map.of("message", "Đã xóa bay màu sản phẩm ID: " + id));
     }
 
-    // --- KHU VỰC UTILITY (Hồi phục lại cái này để pass Test) ---
+    // ---------------------------------------------------------
+    // 💣 FEATURE 7: UPLOAD ẢNH (MALWARE GATE)
+    // Yêu cầu: Chỉ Admin + Check Hex Magic Number (trong Service)
+    // ---------------------------------------------------------
+    @PostMapping(value = "/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> uploadImage(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
+        try {
+            // 1. Lưu file vật lý (có check security Hex code)
+            String savedFileName = imageService.saveImage(file);
 
-    // 👇 Cái hàm này nãy tui lỡ xóa nè
+            // 2. Update tên file vào DB
+            inventoryService.updateProductImage(id, savedFileName);
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Upload ảnh thành công!",
+                    "file", savedFileName
+            ));
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Security Alert", "message", e.getMessage()));
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Server Error", "message", e.getMessage()));
+        }
+    }
+
+    // ---------------------------------------------------------
+    // 🐌 FEATURE 8: EXPORT REPORT (RESOURCE KILLER PREVENTION)
+    // Yêu cầu: Chỉ Admin + Rate Limit (Bucket4j)
+    // ---------------------------------------------------------
+    @GetMapping("/export")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> exportInventory() {
+        // HARDENING: Rate Limit Check
+        if (bucket.tryConsume(1)) {
+            // Còn token -> Cho phép chạy (Giả lập task nặng)
+            return ResponseEntity.ok(Map.of(
+                    "status", "Processing",
+                    "message", "Đang xuất báo cáo. Vui lòng check mail sau 5 phút!",
+                    "note", "Task này tốn CPU lắm đấy nhé!"
+            ));
+        } else {
+            // Hết token -> Chặn (HTTP 429)
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of(
+                            "error", "Too Many Requests",
+                            "message", "Bình tĩnh bro! Server đang thở oxy. Thử lại sau 1 phút."
+                    ));
+        }
+    }
+
     @GetMapping("/version")
     @ResponseStatus(HttpStatus.OK)
     public Map<String, String> getVersion() {
         return Map.of("version", "V3", "message", "🔥 HELLO SHIN! Đây là bản build V3 - Hardened RBAC Mode!");
     }
 
-    // 👇 Cái hàm này cho admin check server
     @GetMapping("/server-info")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> getServerInfo() {

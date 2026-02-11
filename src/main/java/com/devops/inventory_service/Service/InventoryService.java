@@ -93,4 +93,16 @@ public class InventoryService {
             inventory.setSkuCode(cleanSku);
         }
     }
+
+    public void updateProductImage(Long id, String fileName) {
+        // 1. Tìm sản phẩm
+        Inventory inventory = inventoryRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Product not found with id " + id));
+
+        // 2. Set tên file ảnh mới
+        inventory.setImageFileName(fileName);
+
+        // 3. Lưu xuống DB
+        inventoryRepository.save(inventory);
+    }
 }

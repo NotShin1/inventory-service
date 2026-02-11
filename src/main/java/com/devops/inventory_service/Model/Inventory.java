@@ -31,4 +31,7 @@ public class Inventory {
     private Integer quantity; // Số lượng tồn kho
 
     private BigDecimal price; // Giá nhập kho (Dùng BigDecimal là chuẩn nhất cho tiền tệ)
+
+    @Column(name = "image_file_name") // Tên cột trong DB
+    private String imageFileName;     // Lưu tên file (ví dụ: uuid-123.jpg)
 }
