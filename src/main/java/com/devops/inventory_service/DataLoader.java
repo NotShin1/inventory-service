@@ -21,10 +21,10 @@ public class DataLoader {
 
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
+    private final OrderRepository orderRepository; // <--- Thêm ông thần này để nạp Order
     private final PasswordEncoder passwordEncoder;
 
     // --- LẤY CONFIG TỪ BIẾN MÔI TRƯỜNG (.env) ---
-    // Cấu trúc: @Value("${TEN_BIEN_TRONG_ENV : GIA_TRI_MAC_DINH}")
     @Value("${APP_ADMIN_USERNAME:admin}")
     private String adminUsername;
 
@@ -35,33 +35,53 @@ public class DataLoader {
     @Transactional // Đảm bảo tính toàn vẹn dữ liệu
     CommandLineRunner initDatabase(InventoryRepository inventoryRepository) {
         return args -> {
+            // ==========================================
             // 1. Kich hoat ROLE (Quan trọng nhất)
+            // ==========================================
             if (roleRepository.count() == 0) {
                 roleRepository.save(new Role(null, ERole.ROLE_USER));
                 roleRepository.save(new Role(null, ERole.ROLE_ADMIN));
                 System.out.println(">>> [SECURITY] Đã khởi tạo ROLE_USER và ROLE_ADMIN");
             }
 
-            // 2. Tạo User Admin TỪ ENV (Chỉ tạo nếu chưa có)
+            // ==========================================
+            // 2. Tạo User Admin & User Thường (Để test IDOR)
+            // ==========================================
+
+            // 2.1 Tạo Admin
             if (!userRepository.existsByUsername(adminUsername)) {
                 User admin = new User();
                 admin.setUsername(adminUsername);
-                admin.setPassword(passwordEncoder.encode(adminPassword)); // Mã hoá pass từ env
+                admin.setPassword(passwordEncoder.encode(adminPassword));
                 admin.setAccountNonLocked(true);
 
                 Set<Role> roles = new HashSet<>();
-                Role adminRole = roleRepository.findByName(ERole.ROLE_ADMIN)
-                        .orElseThrow(() -> new RuntimeException("Error: Role Admin not found."));
-                roles.add(adminRole);
+                roles.add(roleRepository.findByName(ERole.ROLE_ADMIN).orElseThrow());
                 admin.setRoles(roles);
 
                 userRepository.save(admin);
                 System.out.println(">>> [SECURITY] Đã tạo Admin User: " + adminUsername);
-            } else {
-                System.out.println(">>> [SECURITY] Admin User (" + adminUsername + ") đã tồn tại. Bỏ qua.");
             }
 
-            // 3. Nạp dữ liệu mẫu cho Kho (Inventory)
+            // 2.2 Tạo User Thường (user/user123) -> Dùng để đóng vai hacker check IDOR
+            String normalUser = "user";
+            if (!userRepository.existsByUsername(normalUser)) {
+                User user = new User();
+                user.setUsername(normalUser);
+                user.setPassword(passwordEncoder.encode("user123")); // Pass mặc định cho user thường
+                user.setAccountNonLocked(true);
+
+                Set<Role> roles = new HashSet<>();
+                roles.add(roleRepository.findByName(ERole.ROLE_USER).orElseThrow());
+                user.setRoles(roles);
+
+                userRepository.save(user);
+                System.out.println(">>> [SECURITY] Đã tạo Normal User: " + normalUser);
+            }
+
+            // ==========================================
+            // 3. Nạp dữ liệu Inventory (Kho)
+            // ==========================================
             if (inventoryRepository.count() == 0) {
                 Inventory sp1 = new Inventory();
                 sp1.setSkuCode("iphone_15_pm");
@@ -75,6 +95,31 @@ public class DataLoader {
 
                 inventoryRepository.saveAll(List.of(sp1, sp2));
                 System.out.println(">>> [DATA] Đã nạp dữ liệu kho mẫu!");
+            }
+
+            // ==========================================
+            // 4. Nạp dữ liệu Order (Để test Feature 6 - IDOR)
+            // ==========================================
+            if (orderRepository.count() == 0) {
+                User adminObj = userRepository.findByUsername(adminUsername).orElseThrow();
+                User userObj = userRepository.findByUsername(normalUser).orElseThrow();
+
+                // Đơn hàng của Admin (ID: 1)
+                Order order1 = new Order();
+                order1.setOrderNumber("ORD-ADMIN-001");
+                order1.setTotalAmount(1200.0);
+                order1.setUser(adminObj); // Của Admin
+                order1.setStatus("PAID");
+
+                // Đơn hàng của User thường (ID: 2)
+                Order order2 = new Order();
+                order2.setOrderNumber("ORD-USER-001");
+                order2.setTotalAmount(50.0);
+                order2.setUser(userObj); // Của User
+                order2.setStatus("PENDING");
+
+                orderRepository.saveAll(List.of(order1, order2));
+                System.out.println(">>> [DATA] Đã tạo Order mẫu để test IDOR (1 cái của Admin, 1 cái của User)");
             }
         };
     }

@@ -5,6 +5,7 @@ import com.devops.inventory_service.Security.UserDetailsServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
@@ -38,44 +39,50 @@ public class SecurityConfig {
                 // 2. Chế độ Stateless
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                // 3. 🛡️ QUẢN LÝ HTTPS (FIXED)
-                // Sửa lỗi 'permitAll': Dùng requiresInsecure() cho HTTP, requiresSecure() cho HTTPS
+                // 3. 🛡️ QUẢN LÝ HTTPS
                 .requiresChannel(channel -> channel
-                        .requestMatchers("/actuator/**", "/health/**").requiresInsecure() // Cho phép HTTP (để Health Check không chết)
-                        .anyRequest().requiresSecure() // Các API khác bắt buộc HTTPS
+                        .requestMatchers("/actuator/**", "/health/**").requiresInsecure()
+                        .anyRequest().requiresSecure()
                 )
 
-                // 4. 🛡️ SECURITY HEADERS (FIXED)
+                // 4. 🛡️ SECURITY HEADERS
                 .headers(headers -> headers
-                        // HSTS
                         .httpStrictTransportSecurity(hsts -> hsts
                                 .includeSubDomains(true)
                                 .maxAgeInSeconds(31536000)
                                 .preload(true)
                         )
-                        // Chống Clickjacking
                         .frameOptions(frame -> frame.deny())
-
-                        // Chống XSS
                         .xssProtection(xss -> xss.headerValue(XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK))
-
-                        // CSP
                         .contentSecurityPolicy(csp -> csp
                                 .policyDirectives("default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';")
                         )
-
-                        // Referrer Policy
                         .referrerPolicy(referrer -> referrer.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
-
-                        // Sửa lỗi 'Operator ==': Chỉ cần gọi hàm là bật mặc định (nosniff)
                         .contentTypeOptions(Customizer.withDefaults())
                 )
 
-                // 5. Phân quyền truy cập
+                // 5. Phân quyền truy cập (AUTHORIZATION)
                 .authorizeHttpRequests(auth -> auth
+                        // Public Endpoints
                         .requestMatchers("/actuator/**", "/health/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/inventory/version").permitAll()
+
+                        // === [START] ADDED NEW RULES FOR HARDENING ===
+
+                        // Feature 8: Export Báo Cáo -> Chỉ ADMIN (Resource Killer Prevention)
+                        .requestMatchers("/api/inventory/export").hasRole("ADMIN")
+
+                        // Feature 7: Upload Ảnh -> Chỉ ADMIN (Malware Prevention)
+                        // Chỉ chặn method POST, còn GET ảnh (nếu có) thì có thể cho User xem
+                        .requestMatchers(HttpMethod.POST, "/api/inventory/{id}/image").hasRole("ADMIN")
+
+                        // Feature 6: Orders -> Phải Login (IDOR Prevention logic sẽ nằm ở Service layer)
+                        .requestMatchers("/api/orders/**").authenticated()
+
+                        // === [END] ADDED NEW RULES ===
+
+                        // Default: Các API còn lại bắt buộc phải Login
                         .anyRequest().authenticated()
                 );
 
