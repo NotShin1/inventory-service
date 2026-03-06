@@ -68,7 +68,7 @@ public class SecurityConfig {
                         // --- KHU VỰC PUBLIC (Ai cũng vào được) ---
                         // 🔥 QUAN TRỌNG: Mở cửa cho Docker Healthcheck chọc vào
                         .requestMatchers("/actuator/health/**").permitAll()
-
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // Login/Register
                         .requestMatchers("/api/auth/**").permitAll()
                         // API check version
