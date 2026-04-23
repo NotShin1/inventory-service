@@ -101,7 +101,6 @@ jobs:
             
             echo "✅ Deployment Successful!"
 
-      # ... (Các bước deploy cũ ở trên) ...
 
       - name: Notify Success
         if: success()

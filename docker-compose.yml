@@ -16,7 +16,8 @@ services:
       - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
     networks:
-      - inventory-network
+      - monitor-network
+      - db-network
     env_file:
       - .env
     healthcheck:
@@ -41,7 +42,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - inventory-network
+      - db-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 10s
@@ -77,7 +78,7 @@ services:
     ports:
       - "127.0.0.1:9090:9090"           # 🔥 SECURE: Chỉ localhost mới xem được Metrics
     networks:
-      - inventory-network
+      - monitor-network
 
   # ==========================================
   # 4. GRAFANA (SECURE PORT)
@@ -92,7 +93,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
     networks:
-      - inventory-network
+      - monitor-network
 
 volumes:
   postgres_data:
@@ -100,5 +101,7 @@ volumes:
   prometheus_data:
 
 networks:
-  inventory-network:
+  db-network:
+    driver: bridge
+  monitor-network:
     driver: bridge
