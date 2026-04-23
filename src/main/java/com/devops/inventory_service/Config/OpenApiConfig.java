@@ -1,9 +1,12 @@
 package com.devops.inventory_service.Config;
 
+import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,8 +29,17 @@ public class OpenApiConfig {
                                 .email("contact@shin-devops.me"))
                         .license(new License().name("Apache 2.0").url("http://springdoc.org")))
                 .servers(List.of(
-                        new Server().url("https://shin-devops.me").description("Production Server"),
+
+                        new Server().url("https://api.shin-devops.me").description("Production Server"),
                         new Server().url("http://localhost:8080").description("Local Development")
-                ));
+                ))
+
+                .addSecurityItem(new SecurityRequirement().addList("BearerAuth"))
+                .components(new Components()
+                        .addSecuritySchemes("BearerAuth", new SecurityScheme()
+                                .name("BearerAuth")
+                                .type(SecurityScheme.Type.HTTP)
+                                .scheme("bearer")
+                                .bearerFormat("JWT")));
     }
 }
