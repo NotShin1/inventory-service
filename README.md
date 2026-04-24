@@ -7,7 +7,7 @@ An enterprise-grade Inventory Management RESTful API built with **Java Spring Bo
 ---
 
 ## 🏗️ Architecture Design
-![Architecture Diagram](assets/architecture.jpg)
+![Architecture Diagram](assets/architecture.png)
 *System architecture showcasing CI/CD flow, Network Isolation (Docker), and Secure Monitoring via SSH Tunneling.*
 
 ---
