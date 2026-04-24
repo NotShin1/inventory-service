@@ -1,4 +1,4 @@
-# 🛡️ Inventory Service - DevSecOps Integrated Application
+# 📦 Inventory Service - DevSecOps Integrated Application
 
 > **Status:** 🟢 Production | **CI/CD:** Active | **Security:** Hardened
 
@@ -6,12 +6,17 @@ An enterprise-grade Inventory Management RESTful API built with **Java Spring Bo
 
 ---
 
-## 📸 Monitoring & Alerting
-*(Place your screenshots here - This is the most important visual part)*
+## 🏗️ Architecture Design
+![Architecture Diagram](assets/architecture.jpg)
+*System architecture showcasing CI/CD flow, Network Isolation (Docker), and Secure Monitoring via SSH Tunneling.*
+
+---
+
+## 📊 Monitoring & Alerting
 
 | System Health (Grafana) | CI/CD Pipeline (GitHub Actions) |
 |:-------------------------:|:-----------------------------:|
-| ![Grafana Dashboard](grafana.png) | ![CI/CD Log](discord.png) |
+| ![Grafana Dashboard](assets/grafana.png) | ![CI/CD Log](assets/discord.png) |
 | *Real-time metrics: CPU, RAM, HTTP Logs (401/403 detection)* | *Automated Build, Test, Trivy Scan & Discord Alert* |
 
 ---
@@ -21,23 +26,23 @@ An enterprise-grade Inventory Management RESTful API built with **Java Spring Bo
 * **Core Backend:** Java 21, Spring Boot 3, Hibernate/JPA.
 * **Database:** PostgreSQL (Dockerized).
 * **Security:** Spring Security, JWT (Access + Refresh Token), BCrypt.
-* **Infrastructure:** Docker, Docker Compose, Nginx.
+* **Infrastructure:** Docker, Docker Compose, Nginx (Reverse Proxy & SSL).
 * **DevOps & CI/CD:**
-    * **Pipeline:** GitHub Actions.
-    * **Container Registry:** Docker Hub.
-    * **Security Scanning:** Trivy (Container & OS vulnerabilities).
-    * **Notification:** Discord Webhook.
+  * **Pipeline:** GitHub Actions.
+  * **Container Registry:** Docker Hub.
+  * **Security Scanning:** Trivy (Container & OS vulnerabilities).
+  * **Notification:** Discord Webhook.
 * **Observability:**
-    * **Metrics:** Prometheus.
-    * **Visualization:** Grafana (Custom Dashboards).
+  * **Metrics:** Prometheus.
+  * **Visualization:** Grafana (Custom Dashboards).
 
 ---
 
-## 🔥 Key Features (DevSecOps Highlights)
+## 🛡️ Key Features (DevSecOps Highlights)
 
 This project focuses on **Security Hardening** and **Operational Excellence** beyond standard CRUD operations.
 
-### 🔐 1. Security Hardening
+### 🔒 1. Security Hardening
 * **Anti-Brute Force:** Implemented purposeful login delay (1s) to mitigate timing attacks and brute-force attempts.
 * **Rate Limiting:** Integrated **Bucket4j** to prevent DDoS and API spamming at the application level.
 * **Malware Protection:** Secure file upload validation (Magic Numbers check) to block executable files disguised as images.
@@ -66,7 +71,7 @@ This project focuses on **Security Hardening** and **Operational Excellence** be
 ### Quick Start
 ```bash
 # 1. Clone the repository
-git clone [https://github.com/username/inventory-service.git](https://github.com/username/inventory-service.git)
+git clone [https://github.com/NotShin1/inventory-service.git](https://github.com/NotShin1/inventory-service.git)
 cd inventory-service
 
 # 2. Configure Environment Variables
@@ -78,4 +83,4 @@ docker-compose up -d
 
 # 4. Access the application
 # App API: http://localhost:8080
-# Grafana: http://localhost:3000 (Default user: admin/admin)
+# Grafana: http://localhost:3000 (Default user: admin/admin123)
