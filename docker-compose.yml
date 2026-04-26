@@ -38,7 +38,7 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${DB_NAME}
     ports:
-      - "127.0.0.1:5432:5432"           # 🔥 SECURE: Chỉ localhost mới chọc được vào DB
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
